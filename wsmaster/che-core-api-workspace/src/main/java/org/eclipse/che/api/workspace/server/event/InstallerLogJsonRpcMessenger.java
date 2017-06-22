@@ -8,7 +8,7 @@
  * Contributors:
  *   Codenvy, S.A. - initial API and implementation
  *******************************************************************************/
-package org.eclipse.che.workspace.infrastructure.docker;
+package org.eclipse.che.api.workspace.server.event;
 
 import org.eclipse.che.api.core.notification.RemoteSubscriptionManager;
 import org.eclipse.che.api.workspace.shared.dto.RuntimeIdentityDto;
@@ -25,18 +25,17 @@ import java.util.Map;
  * @author Anton Korneta
  */
 @Singleton
-public class InfraLogsJsonRpcMessenger {
+public class InstallerLogJsonRpcMessenger {
     private final RemoteSubscriptionManager remoteSubscriptionManager;
 
     @Inject
-    public InfraLogsJsonRpcMessenger(RemoteSubscriptionManager remoteSubscriptionManager) {
+    public InstallerLogJsonRpcMessenger(RemoteSubscriptionManager remoteSubscriptionManager) {
         this.remoteSubscriptionManager = remoteSubscriptionManager;
     }
 
     @PostConstruct
     private void postConstruct() {
         remoteSubscriptionManager.register("installer/log", InstallerLogEvent.class, this::predicate);
-        remoteSubscriptionManager.register("machine/log", InstallerLogEvent.class, this::predicate);
     }
 
     private boolean predicate(InstallerLogEvent event, Map<String, String> scope) {

@@ -8,29 +8,28 @@
  * Contributors:
  *   Codenvy, S.A. - initial API and implementation
  *******************************************************************************/
-package org.eclipse.che.workspace.infrastructure.docker.service;
+package org.eclipse.che.workspace.infrastructure.docker.output;
 
 import org.eclipse.che.api.core.jsonrpc.commons.RequestHandlerConfigurator;
 import org.eclipse.che.api.core.notification.EventService;
-import org.eclipse.che.api.workspace.shared.dto.event.BootstrapperStatusEvent;
-import org.eclipse.che.api.workspace.shared.dto.event.InstallerStatusEvent;
+import org.eclipse.che.api.workspace.shared.dto.event.InstallerLogEvent;
 
 import javax.annotation.PostConstruct;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
 /**
- * Service for handling bootstrapper & installer events.
+ * Service for handling bootstrapper & installer logs.
  *
- * @author Max Shaposhnik (mshaposhnik@codenvy.com)
+ * @author Sergii Leshchenko
  */
 @Singleton
-public class InstallerService {
+public class OutputService {
     private final RequestHandlerConfigurator requestHandler;
     private final EventService               eventService;
 
     @Inject
-    public InstallerService(RequestHandlerConfigurator requestHandler, EventService eventService) {
+    public OutputService(RequestHandlerConfigurator requestHandler, EventService eventService) {
         this.requestHandler = requestHandler;
         this.eventService = eventService;
     }
@@ -38,25 +37,14 @@ public class InstallerService {
     @PostConstruct
     public void configureMethods() {
         requestHandler.newConfiguration()
-                      .methodName("bootstrapper/statusChanged")
-                      .paramsAsDto(BootstrapperStatusEvent.class)
+                      .methodName("installer/log")
+                      .paramsAsDto(InstallerLogEvent.class)
                       .noResult()
-                      .withConsumer(this::handleBootstrapperStatus);
-
-        requestHandler.newConfiguration()
-                      .methodName("installer/statusChanged")
-                      .paramsAsDto(InstallerStatusEvent.class)
-                      .noResult()
-                      .withConsumer(this::handleInstallerStatus);
+                      .withConsumer(this::handleInstallerLog);
     }
 
-    private void handleInstallerStatus(InstallerStatusEvent installerStatusEvent) {
+    private void handleInstallerLog(InstallerLogEvent installerStatusEvent) {
         //TODO: spi actions here
         eventService.publish(installerStatusEvent);
-    }
-
-    private void handleBootstrapperStatus(BootstrapperStatusEvent bootstrapperStatusEvent) {
-        //TODO: spi actions here
-        eventService.publish(bootstrapperStatusEvent);
     }
 }
