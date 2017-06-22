@@ -11,7 +11,7 @@
 package org.eclipse.che.workspace.infrastructure.docker.output;
 
 import org.eclipse.che.api.core.jsonrpc.commons.RequestHandlerConfigurator;
-import org.eclipse.che.api.core.notification.EventService;
+import org.eclipse.che.api.core.notification.RemoteEventService;
 import org.eclipse.che.api.workspace.shared.dto.event.InstallerLogEvent;
 
 import javax.annotation.PostConstruct;
@@ -19,19 +19,20 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 
 /**
- * Service for handling bootstrapper & installer logs.
+ * Service for handling output.
  *
  * @author Sergii Leshchenko
  */
 @Singleton
 public class OutputService {
     private final RequestHandlerConfigurator requestHandler;
-    private final EventService               eventService;
+    private final RemoteEventService         remoteEventService;
 
     @Inject
-    public OutputService(RequestHandlerConfigurator requestHandler, EventService eventService) {
+    public OutputService(RequestHandlerConfigurator requestHandler,
+                         RemoteEventService manager) {
         this.requestHandler = requestHandler;
-        this.eventService = eventService;
+        this.remoteEventService = manager;
     }
 
     @PostConstruct
@@ -44,7 +45,9 @@ public class OutputService {
     }
 
     private void handleInstallerLog(InstallerLogEvent installerStatusEvent) {
-        //TODO: spi actions here
-        eventService.publish(installerStatusEvent);
+        remoteEventService.publish("installer/log",
+                                   installerStatusEvent,
+                                   (event, scope) ->
+                                           event.getRuntimeId().getWorkspaceId().equals(scope.get("workspaceId")));
     }
 }

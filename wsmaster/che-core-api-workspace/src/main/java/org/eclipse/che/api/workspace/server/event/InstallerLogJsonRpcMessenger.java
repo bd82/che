@@ -10,7 +10,7 @@
  *******************************************************************************/
 package org.eclipse.che.api.workspace.server.event;
 
-import org.eclipse.che.api.core.notification.RemoteSubscriptionManager;
+import org.eclipse.che.api.core.notification.RemoteEventService;
 import org.eclipse.che.api.workspace.shared.dto.RuntimeIdentityDto;
 import org.eclipse.che.api.workspace.shared.dto.event.InstallerLogEvent;
 
@@ -26,16 +26,16 @@ import java.util.Map;
  */
 @Singleton
 public class InstallerLogJsonRpcMessenger {
-    private final RemoteSubscriptionManager remoteSubscriptionManager;
+    private final RemoteEventService remoteEventService;
 
     @Inject
-    public InstallerLogJsonRpcMessenger(RemoteSubscriptionManager remoteSubscriptionManager) {
-        this.remoteSubscriptionManager = remoteSubscriptionManager;
+    public InstallerLogJsonRpcMessenger(RemoteEventService remoteEventService) {
+        this.remoteEventService = remoteEventService;
     }
 
     @PostConstruct
     private void postConstruct() {
-        remoteSubscriptionManager.register("installer/log", InstallerLogEvent.class, this::predicate);
+        remoteEventService.register("installer/log", InstallerLogEvent.class, this::predicate);
     }
 
     private boolean predicate(InstallerLogEvent event, Map<String, String> scope) {

@@ -17,7 +17,6 @@ import org.eclipse.che.api.core.jsonrpc.commons.RequestHandlerConfigurator;
 import org.eclipse.che.api.core.jsonrpc.commons.RequestTransmitter;
 import org.eclipse.che.api.core.notification.dto.EventSubscription;
 
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
@@ -27,16 +26,50 @@ import java.util.function.BiPredicate;
 
 import static java.util.Collections.emptySet;
 
+/**
+ * Dispatchers events to subscribed listeners via json rpc.
+ *
+ * <p>It also can republish events from {@link EventService event service} if
+ * it is configured by {@link #register} method.
+ *
+ * <p>Json rpc subscribe message example:
+ * <pre>
+ *   {
+ *     "jsonrpc":"2.0",
+ *     "method":"subscribe",
+ *     "params": {
+ *       "method":"demo/method",
+ *         "scope": {
+ *           "channelId":"channel123"
+ *         }
+ *       }
+ *   }
+ * </pre>
+ *
+ * <p>Json rpc unsubscribe message example:
+ * <pre>
+ *   {
+ *     "jsonrpc":"2.0",
+ *     "method":"unsubscribe",
+ *     "params": {
+ *       "method":"demo/method",
+ *         "scope": {
+ *           "channelId":"channel123"
+ *         }
+ *       }
+ *   }
+ * </pre>
+ */
 @Singleton
-public class RemoteSubscriptionManager {
+public class RemoteEventService {
     private final Map<String, Set<SubscriptionContext>> subscriptionContexts = new ConcurrentHashMap<>();
 
     private final EventService       eventService;
     private final RequestTransmitter requestTransmitter;
 
     @Inject
-    public RemoteSubscriptionManager(EventService eventService,
-                                     RequestTransmitter requestTransmitter) {
+    public RemoteEventService(EventService eventService,
+                              RequestTransmitter requestTransmitter) {
         this.eventService = eventService;
         this.requestTransmitter = requestTransmitter;
     }
@@ -60,8 +93,16 @@ public class RemoteSubscriptionManager {
         eventService.subscribe(event -> subscriptionContexts.getOrDefault(method, new HashSet<>())
                                                             .stream()
                                                             .filter(context -> biPredicate.test(event, context.scope))
-                                                            .forEach(context -> transmit(context.endpointId, method, event)),
+                                                            .forEach(context -> transmit(context.endpointId, method,
+                                                                                         event)),
                                eventType);
+    }
+
+    public <T> void publish(String method, T event, BiPredicate<T, Map<String, String>> biPredicate) {
+        subscriptionContexts.getOrDefault(method, new HashSet<>())
+                            .stream()
+                            .filter(context -> biPredicate.test(event, context.scope))
+                            .forEach(context -> transmit(context.endpointId, method, event));
     }
 
     private void consumeSubscriptionRequest(String endpointId, EventSubscription eventSubscription) {
@@ -71,7 +112,8 @@ public class RemoteSubscriptionManager {
 
     private void consumeUnSubscriptionRequest(String endpointId, EventSubscription eventSubscription) {
         subscriptionContexts.getOrDefault(eventSubscription.getMethod(), emptySet())
-                            .removeIf(subscriptionContext -> Objects.equals(subscriptionContext.endpointId, endpointId));
+                            .removeIf(
+                                    subscriptionContext -> Objects.equals(subscriptionContext.endpointId, endpointId));
     }
 
     private <T> void transmit(String endpointId, String method, T event) {
