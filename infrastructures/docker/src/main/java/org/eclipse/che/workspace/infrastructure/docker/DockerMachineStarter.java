@@ -19,13 +19,17 @@ import org.eclipse.che.api.core.model.workspace.config.ServerConfig;
 import org.eclipse.che.api.core.model.workspace.runtime.RuntimeIdentity;
 import org.eclipse.che.api.core.util.FileCleaner;
 import org.eclipse.che.api.core.util.SystemInfo;
+import org.eclipse.che.api.workspace.server.DtoConverter;
 import org.eclipse.che.api.workspace.server.model.impl.MachineSourceImpl;
 import org.eclipse.che.api.workspace.server.spi.InfrastructureException;
 import org.eclipse.che.api.workspace.server.spi.InternalInfrastructureException;
+import org.eclipse.che.api.workspace.shared.dto.event.MachineLogEvent;
 import org.eclipse.che.commons.annotation.Nullable;
 import org.eclipse.che.commons.env.EnvironmentContext;
 import org.eclipse.che.commons.lang.os.WindowsPathEscaper;
+import org.eclipse.che.dto.server.DtoFactory;
 import org.eclipse.che.plugin.docker.client.DockerConnector;
+import org.eclipse.che.plugin.docker.client.ProgressLineFormatterImpl;
 import org.eclipse.che.plugin.docker.client.ProgressMonitor;
 import org.eclipse.che.plugin.docker.client.UserSpecificDockerRegistryCredentialsProvider;
 import org.eclipse.che.plugin.docker.client.exception.ImageNotFoundException;
@@ -144,6 +148,7 @@ public class DockerMachineStarter {
     private final String[]                                      dnsResolvers;
     private       ServerEvaluationStrategyProvider              serverEvaluationStrategyProvider;
     private final Map<String, String>                           buildArgs;
+    private final MachineLogger                                 machineLogger;
 
     @Inject
     public DockerMachineStarter(DockerConnector docker,
@@ -171,7 +176,8 @@ public class DockerMachineStarter {
                                 @Named("che.docker.extra_hosts") Set<Set<String>> additionalHosts,
                                 @Nullable @Named("che.docker.dns_resolvers") String[] dnsResolvers,
                                 ServerEvaluationStrategyProvider serverEvaluationStrategyProvider,
-                                @Named("che.docker.build_args") Map<String, String> buildArgs) {
+                                @Named("che.docker.build_args") Map<String, String> buildArgs,
+                                MachineLogger machineLogger) {
         // TODO spi should we move all configuration stuff into infrastructure provisioner and left logic of container start here only
         this.docker = docker;
         this.dockerCredentials = dockerCredentials;
@@ -199,6 +205,7 @@ public class DockerMachineStarter {
         this.dnsResolvers = dnsResolvers;
         this.buildArgs = buildArgs;
         this.serverEvaluationStrategyProvider = serverEvaluationStrategyProvider;
+        this.machineLogger = machineLogger;
 
         allMachinesSystemVolumes = removeEmptyAndNullValues(allMachinesSystemVolumes);
         devMachineSystemVolumes = removeEmptyAndNullValues(devMachineSystemVolumes);
@@ -299,18 +306,12 @@ public class DockerMachineStarter {
         // copy to not affect/be affected by changes in origin
         containerConfig = new DockerContainerConfig(containerConfig);
 
-        // TODO spi fix in #5102
-        ProgressMonitor progressMonitor = ProgressMonitor.DEV_NULL;
-        /*LineConsumer machineLogger = new ListLineConsumer();
-        ProgressLineFormatterImpl progressLineFormatter = new ProgressLineFormatterImpl();
-        ProgressMonitor progressMonitor = currentProgressStatus -> {
-            try {
-                machineLogger.writeLine(progressLineFormatter.format(currentProgressStatus));
-            } catch (IOException e) {
-                LOG.error(e.getLocalizedMessage(), e);
-            }
-        };*/
-
+        final ProgressLineFormatterImpl formatter = new ProgressLineFormatterImpl();
+        final ProgressMonitor progressMonitor = status ->
+                machineLogger.publish(DtoFactory.newDto(MachineLogEvent.class)
+                                                .withRuntimeId(DtoConverter.asDto(identity))
+                                                .withMachineName(machineName)
+                                                .withText(formatter.format(status)));
         String container = null;
         try {
             String image = prepareImage(machineName,
@@ -348,7 +349,8 @@ public class DockerMachineStarter {
                                      container,
                                      image,
                                      serverEvaluationStrategyProvider,
-                                     dockerInstanceStopDetector);
+                                     dockerInstanceStopDetector,
+                                     machineLogger);
         } catch (RuntimeException | IOException | InfrastructureException e) {
             cleanUpContainer(container);
             if (e instanceof InfrastructureException) {

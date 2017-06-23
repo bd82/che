@@ -143,6 +143,7 @@ public class MachineStarter {
     private final String[]                                      dnsResolvers;
     private       ServerEvaluationStrategyProvider              serverEvaluationStrategyProvider;
     private final Map<String, String>                           buildArgs;
+    private final MachineLogger machineLogger;
 
     @Inject
     public MachineStarter(DockerConnector docker,
@@ -170,7 +171,8 @@ public class MachineStarter {
                           @Named("che.docker.extra_hosts") Set<Set<String>> additionalHosts,
                           @Nullable @Named("che.docker.dns_resolvers") String[] dnsResolvers,
                           ServerEvaluationStrategyProvider serverEvaluationStrategyProvider,
-                          @Named("che.docker.build_args") Map<String, String> buildArgs) {
+                          @Named("che.docker.build_args") Map<String, String> buildArgs,
+                          MachineLogger machineLogger) {
         // TODO spi should we move all configuration stuff into infrastructure provisioner and left logic of container start here only
         this.docker = docker;
         this.dockerCredentials = dockerCredentials;
@@ -198,6 +200,7 @@ public class MachineStarter {
         this.dnsResolvers = dnsResolvers;
         this.buildArgs = buildArgs;
         this.serverEvaluationStrategyProvider = serverEvaluationStrategyProvider;
+        this.machineLogger = machineLogger;
 
         allMachinesSystemVolumes = removeEmptyAndNullValues(allMachinesSystemVolumes);
         devMachineSystemVolumes = removeEmptyAndNullValues(devMachineSystemVolumes);
@@ -347,7 +350,8 @@ public class MachineStarter {
                                      container,
                                      image,
                                      serverEvaluationStrategyProvider,
-                                     dockerInstanceStopDetector);
+                                     dockerInstanceStopDetector,
+                                     machineLogger);
         } catch (RuntimeException | IOException | InfrastructureException e) {
             cleanUpContainer(container);
             if (e instanceof InfrastructureException) {

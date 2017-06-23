@@ -17,7 +17,9 @@ import org.eclipse.che.api.core.model.workspace.runtime.ServerStatus;
 import org.eclipse.che.api.workspace.server.model.impl.ServerImpl;
 import org.eclipse.che.api.workspace.server.spi.InfrastructureException;
 import org.eclipse.che.api.workspace.server.spi.InternalInfrastructureException;
+import org.eclipse.che.api.workspace.shared.dto.event.MachineLogEvent;
 import org.eclipse.che.commons.lang.NameGenerator;
+import org.eclipse.che.dto.server.DtoFactory;
 import org.eclipse.che.plugin.docker.client.DockerConnector;
 import org.eclipse.che.plugin.docker.client.Exec;
 import org.eclipse.che.plugin.docker.client.LogMessage;
@@ -98,6 +100,7 @@ public class DockerMachine implements Machine {
     private final boolean                          snapshotUseRegistry;
     private final ContainerInfo                    info;
     private final ServerEvaluationStrategyProvider provider;
+    private final MachineLogger                    machineLogger;
 
     private Map<String, ServerImpl> servers;
 
@@ -109,7 +112,8 @@ public class DockerMachine implements Machine {
                          @Assisted("container") String container,
                          @Assisted("image") String image,
                          ServerEvaluationStrategyProvider provider,
-                         DockerMachineStopDetector dockerMachineStopDetector) throws InfrastructureException {
+                         DockerMachineStopDetector dockerMachineStopDetector,
+                         MachineLogger machineLogger) throws InfrastructureException {
         this.container = container;
         this.docker = docker;
         this.image = image;
@@ -117,6 +121,7 @@ public class DockerMachine implements Machine {
         this.registryNamespace = registryNamespace;
         this.snapshotUseRegistry = snapshotUseRegistry;
         this.dockerMachineStopDetector = dockerMachineStopDetector;
+        this.machineLogger = machineLogger;
         try {
             this.info = docker.inspectContainer(container);
         } catch (IOException e) {
@@ -223,14 +228,12 @@ public class DockerMachine implements Machine {
             commitContainer(fullRepo, LATEST_TAG);
             //TODO fix this workaround. Docker image is not visible after commit when using swarm
             Thread.sleep(2000);
-            final ProgressLineFormatterImpl lineFormatter = new ProgressLineFormatterImpl();
-            final String digest = docker.push(pushParams,
-                                              progressMonitor -> {
-//                                                  try {
-//                                                      outputConsumer.writeLine(lineFormatter.format(progressMonitor));
-//                                                  } catch (IOException ignored) {
-//                                                  }
-                                              });
+            final ProgressLineFormatterImpl formatter = new ProgressLineFormatterImpl();
+            final String digest = docker.push(pushParams, status ->
+                    machineLogger.publish(DtoFactory.newDto(MachineLogEvent.class)
+                                                    .withRuntimeId(null)
+                                                    .withMachineName(null)
+                                                    .withText(formatter.format(status))));
             docker.removeImage(RemoveImageParams.create(fullRepo).withForce(false));
             return new DockerMachineSource(image).withRegistry(registry).withDigest(digest).withTag(LATEST_TAG);
         } catch (IOException ioEx) {
